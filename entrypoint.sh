@@ -12,7 +12,7 @@ if [ ! -f "$OPENCLAW_STATE_DIR/openclaw.json" ]; then
       --provider "openai-compatible" \
       --endpoint "https://openrouter.ai/api/v1" \
       --key "$INJECTED_OR_KEY" \
-      --model "anthropic/claude-3.5-sonnet" \
+      --model "openrouter/auto" \
       --yes
 fi
 
