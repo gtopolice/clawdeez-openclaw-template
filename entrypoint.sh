@@ -25,5 +25,9 @@ if [ ! -f "$OPENCLAW_STATE_DIR/openclaw.json" ]; then
       --workspace "${OPENCLAW_WORKSPACE_DIR:-/data/workspace}"
 fi
 
+# Ensure gateway.controlUi.allowedOrigins includes this deployment's browser origin
+# (required for non-loopback Control UI; see README).
+python3 /app/patch-openclaw-origins.py
+
 echo "Starting OpenClaw Gateway..."
 exec openclaw gateway run --bind lan --port "$GATEWAY_PORT"

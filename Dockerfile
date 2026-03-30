@@ -16,6 +16,7 @@ ENV OPENCLAW_WORKSPACE_DIR=/data/workspace
 ENV LOG_LEVEL=error 
 
 COPY entrypoint.sh /app/entrypoint.sh
-RUN chmod +x /app/entrypoint.sh
+COPY patch-openclaw-origins.py /app/patch-openclaw-origins.py
+RUN chmod +x /app/entrypoint.sh /app/patch-openclaw-origins.py
 
 ENTRYPOINT ["/app/entrypoint.sh"]
