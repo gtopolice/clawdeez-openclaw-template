@@ -36,5 +36,35 @@ fi
 # (required for non-loopback Control UI; see README).
 python3 /app/patch-openclaw-origins.py
 
+# OpenClaw injects workspace bootstrap files (e.g. AGENTS.md) into the assistant system
+# context — see https://docs.openclaw.ai/concepts/system-prompt
+clawdeez_append_workspace_hosting_context() {
+    local ws="${OPENCLAW_WORKSPACE_DIR:-/data/workspace}"
+    local f="$ws/AGENTS.md"
+    local m="<!-- clawdeez-hosting-context -->"
+
+    mkdir -p "$ws"
+    if [[ -f "$f" ]] && grep -qF "$m" "$f" 2>/dev/null; then
+        return 0
+    fi
+
+    {
+        echo ""
+        echo "$m"
+        echo "## Hosting (ClawDeez · Railway)"
+        echo "This OpenClaw gateway runs in a container on **Railway**, provisioned through **ClawDeez** (managed agent hosting)."
+        echo "When asked where you run, who operates the infrastructure, or what platform this is, answer accurately: **OpenClaw on Railway via ClawDeez**—not a vague “cloud” answer, and do not deny Railway or ClawDeez when the user states them."
+        echo "LLM inference for chat uses **OpenRouter** with the model/tier configured for this deployment (not a single fixed vendor story in replies unless relevant)."
+        if [[ -n "${OPENCLAW_PUBLIC_ORIGIN:-}" ]]; then
+            echo "Users typically open this Control UI at: ${OPENCLAW_PUBLIC_ORIGIN}"
+        elif [[ -n "${RAILWAY_PUBLIC_DOMAIN:-}" ]]; then
+            echo "Railway public hostname: ${RAILWAY_PUBLIC_DOMAIN} (HTTPS is usually https://${RAILWAY_PUBLIC_DOMAIN})."
+        fi
+        echo "$m"
+    } >>"$f"
+}
+
+clawdeez_append_workspace_hosting_context
+
 echo -e "${CLAWDEEZ_BLUE}Starting OpenClaw gateway…${CLR}"
 exec openclaw gateway run --bind lan --port "$GATEWAY_PORT"

@@ -51,7 +51,13 @@ OpenClaw uses two layers: **gateway token** (secret) and **device pairing** (fir
 
 If ClawDeez (or another tool) provisions a Railway public hostname automatically, pass that same hostname into this template as **`OPENCLAW_PUBLIC_ORIGIN`** (or ensure **`RAILWAY_PUBLIC_DOMAIN`** matches the URL users open) so the allowlist stays aligned with the browser URL.
 
-When using [clawdeez-core](https://github.com/gtopolice/clawdeez-core) provisioning, set backend **`PROVISION_OPENCLAW_DISABLE_CONTROL_UI_DEVICE_AUTH=1`** to inject **`OPENCLAW_CONTROL_UI_DISABLE_DEVICE_AUTH=1`** on every new agent service (optional).
+When using [clawdeez-core](https://github.com/gtopolice/clawdeez-core) provisioning, new services get **`OPENCLAW_CONTROL_UI_DISABLE_DEVICE_AUTH=1`** by default (token-only Control UI). Set backend **`PROVISION_OPENCLAW_DISABLE_CONTROL_UI_DEVICE_AUTH=0`** to **skip** that injection and require device pairing instead.
+
+### Assistant workspace context (`AGENTS.md`)
+
+On each container start (after `openclaw onboard` and the origin patch), the entrypoint **idempotently appends** a short **ClawDeez / Railway** section to **`AGENTS.md`** in the workspace (`OPENCLAW_WORKSPACE_DIR`, default `/data/workspace`). OpenClaw loads workspace bootstrap files into the assistant system prompt ([system prompt docs](https://docs.openclaw.ai/concepts/system-prompt)), so the model can answer “where are you hosted?” accurately instead of generic refusals.
+
+The block includes **`OPENCLAW_PUBLIC_ORIGIN`** or **`RAILWAY_PUBLIC_DOMAIN`** when set. To refresh wording after an image upgrade, remove the HTML comment markers `<!-- clawdeez-hosting-context -->` (both) from `AGENTS.md` on the volume and redeploy once.
 
 ### License and attribution
 
