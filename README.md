@@ -16,8 +16,13 @@ This template sets `gateway.controlUi.allowedOrigins` in `openclaw.json` **on ev
 | `OPENCLAW_PUBLIC_ORIGIN` | Optional override: full origin for this deployment, e.g. `https://my-service.up.railway.app`. Takes precedence over `RAILWAY_PUBLIC_DOMAIN` when both apply. Use this if your public URL is not the default Railway domain (custom domain, or tooling that provisions a hostname). |
 | `PUBLIC_APP_URL` | Alias for `OPENCLAW_PUBLIC_ORIGIN` (same normalization: scheme + host + port). |
 | `OPENCLAW_ALLOWED_ORIGINS` | Comma-separated **extra** origins to merge (e.g. a second hostname or `http://localhost:5173` for local dev against a remote gateway). |
+| `OPENCLAW_CONTROL_UI_DISABLE_DEVICE_AUTH` | Set to `1`, `true`, `yes`, or `on` to write `gateway.controlUi.dangerouslyDisableDeviceAuth: true` into `openclaw.json` on each start. **Skips Control UI device pairing** so end users only need the gateway token (no `openclaw devices approve` on the host). **Security tradeoff:** anyone with the token can use the Control UI from any browser; prefer manual pairing for high-assurance setups. Test against your OpenClaw image version — some releases had regressions around this flag. |
 
-If none of the above yield an origin, the patch step does nothing (useful for local Docker without Railway).
+If none of the origin-related variables yield an origin, the patch step still runs when `OPENCLAW_CONTROL_UI_DISABLE_DEVICE_AUTH` is enabled (origins-only merge is skipped in that case).
+
+### Control UI device pairing vs gateway token
+
+OpenClaw uses two layers: **gateway token** (secret) and **device pairing** (first browser connect must be approved on the gateway host, e.g. `openclaw devices approve <id>`). If your users see **“pairing required”** after pasting the correct token, either approve the device once via Railway **Shell** on that service, or set **`OPENCLAW_CONTROL_UI_DISABLE_DEVICE_AUTH=1`** on the Railway service and **redeploy** so the startup patch applies.
 
 ### Gateway token (Control UI login)
 
@@ -33,3 +38,5 @@ If none of the above yield an origin, the patch step does nothing (useful for lo
 ### ClawDeez / provisioned domains
 
 If ClawDeez (or another tool) provisions a Railway public hostname automatically, pass that same hostname into this template as **`OPENCLAW_PUBLIC_ORIGIN`** (or ensure **`RAILWAY_PUBLIC_DOMAIN`** matches the URL users open) so the allowlist stays aligned with the browser URL.
+
+When using [clawdeez-core](https://github.com/gtopolice/clawdeez-core) provisioning, set backend **`PROVISION_OPENCLAW_DISABLE_CONTROL_UI_DEVICE_AUTH=1`** to inject **`OPENCLAW_CONTROL_UI_DISABLE_DEVICE_AUTH=1`** on every new agent service (optional).

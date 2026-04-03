@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-"""Merge Control UI allowedOrigins into ~/.openclaw/openclaw.json from env.
+"""Merge Control UI settings into openclaw.json from env.
 
-See README for OPENCLAW_PUBLIC_ORIGIN, RAILWAY_PUBLIC_DOMAIN, OPENCLAW_ALLOWED_ORIGINS.
+- allowedOrigins: OPENCLAW_PUBLIC_ORIGIN, RAILWAY_PUBLIC_DOMAIN, OPENCLAW_ALLOWED_ORIGINS
+- dangerouslyDisableDeviceAuth: OPENCLAW_CONTROL_UI_DISABLE_DEVICE_AUTH (opt-in; see README)
 """
 from __future__ import annotations
 
@@ -9,6 +10,11 @@ import json
 import os
 import sys
 from urllib.parse import urlparse
+
+
+def env_truthy(name: str) -> bool:
+    v = os.environ.get(name, "").strip().lower()
+    return v in ("1", "true", "yes", "on")
 
 
 def to_origin(url_or_host: str) -> str | None:
@@ -62,7 +68,9 @@ def main() -> int:
         return 0
 
     computed = compute_origins()
-    if not computed:
+    disable_device_auth = env_truthy("OPENCLAW_CONTROL_UI_DISABLE_DEVICE_AUTH")
+
+    if not computed and not disable_device_auth:
         return 0
 
     with open(path, encoding="utf-8") as f:
@@ -70,43 +78,50 @@ def main() -> int:
 
     gw = cfg.setdefault("gateway", {})
     cu = gw.setdefault("controlUi", {})
-    existing = cu.get("allowedOrigins")
-    if not isinstance(existing, list):
-        existing = []
-    # Normalize existing entries (strip trailing slash, keep order)
-    normalized_existing: list[str] = []
-    seen: set[str] = set()
-    for x in existing:
-        if not isinstance(x, str):
-            continue
-        o = to_origin(x)
-        if o is None:
-            s = x.strip().rstrip("/")
-            # Keep non-http(s) origins (e.g. chrome-extension://) OpenClaw may allow
-            if "://" in s:
-                o = s
-        if o and o not in seen:
-            seen.add(o)
-            normalized_existing.append(o)
 
-    merged: list[str] = []
-    merged_seen: set[str] = set()
-    for o in normalized_existing + computed:
-        if o not in merged_seen:
-            merged_seen.add(o)
-            merged.append(o)
+    if computed:
+        existing = cu.get("allowedOrigins")
+        if not isinstance(existing, list):
+            existing = []
+        normalized_existing: list[str] = []
+        seen: set[str] = set()
+        for x in existing:
+            if not isinstance(x, str):
+                continue
+            o = to_origin(x)
+            if o is None:
+                s = x.strip().rstrip("/")
+                if "://" in s:
+                    o = s
+            if o and o not in seen:
+                seen.add(o)
+                normalized_existing.append(o)
 
-    cu["allowedOrigins"] = merged
+        merged: list[str] = []
+        merged_seen: set[str] = set()
+        for o in normalized_existing + computed:
+            if o not in merged_seen:
+                merged_seen.add(o)
+                merged.append(o)
+
+        cu["allowedOrigins"] = merged
+        print(
+            "Control UI allowedOrigins:",
+            ", ".join(merged),
+            file=sys.stderr,
+        )
+
+    if disable_device_auth:
+        cu["dangerouslyDisableDeviceAuth"] = True
+        print(
+            "Control UI dangerouslyDisableDeviceAuth: true (pairing bypass — token-only trust)",
+            file=sys.stderr,
+        )
 
     with open(path, "w", encoding="utf-8") as f:
         json.dump(cfg, f, indent=2)
         f.write("\n")
 
-    print(
-        "Control UI allowedOrigins:",
-        ", ".join(merged),
-        file=sys.stderr,
-    )
     return 0
 
 
