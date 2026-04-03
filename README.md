@@ -41,6 +41,24 @@ OpenClaw uses two layers: **gateway token** (secret) and **device pairing** (fir
 - If the gateway has **no** token configured, the “Gateway token” field in the Control UI can be left empty.
 - If **`OPENCLAW_GATEWAY_TOKEN`** is set in Railway (or `gateway.auth.token` is set in config), the gateway expects that token — **paste the same value** into the Control UI. Mismatch or omission will fail authentication.
 
+#### ClawDeez: prefill from URL hash (strip-after-read)
+
+This template ships a small script in the Control UI (`clawdeez-gateway-bootstrap.js`) that:
+
+1. Reads the gateway token from the **URL fragment**: `#clawdeez-gw=<encodeURIComponent(token)>`
+2. Waits until the token field exists (including inside Shadow DOM), then **prefills** it and dispatches `input` / `change` events.
+3. Calls **`history.replaceState`** so the fragment disappears from the address bar after read (token is not kept in the visible URL).
+
+**Example (open in a new tab from ClawDeez after revealing the token):**
+
+`https://your-agent.example.com/#clawdeez-gw=ENCODED_TOKEN`
+
+Prefer **fragments over query strings** so the token is not sent to the server on navigation.
+
+**sessionStorage (same origin only):** if there is no hash, the script checks `sessionStorage.removeItem('clawdeez.openclawGatewayToken')` once — useful for manual testing on the agent origin. It does **not** cross from `clawdeez.cloud` to `*.clawdeez.cloud`.
+
+**OpenClaw upgrades:** the inject step patches `openclaw`’s bundled `dist/control-ui/index.html` at **image build** time. If a future `openclaw` release changes that file layout, re-verify the Dockerfile `inject-clawdeez-gateway-bootstrap.py` step still runs cleanly.
+
 ### Verify
 
 1. Open `https://<your-service>.up.railway.app` (or your custom domain) at the Control UI path (e.g. `/chat` if that is how you reach the UI for your build).

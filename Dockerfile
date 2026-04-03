@@ -18,6 +18,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends git python3 pyt
     npm install -g "openclaw@${OPENCLAW_VERSION}" && \
     openclaw --version
 
+COPY clawdeez-gateway-bootstrap.js /app/clawdeez-gateway-bootstrap.js
+COPY inject-clawdeez-gateway-bootstrap.py /app/inject-clawdeez-gateway-bootstrap.py
+RUN chmod +x /app/inject-clawdeez-gateway-bootstrap.py && \
+    python3 /app/inject-clawdeez-gateway-bootstrap.py
+
 # Set standard environment variables for persistence
 ENV OPENCLAW_STATE_DIR=/data/.openclaw
 ENV OPENCLAW_WORKSPACE_DIR=/data/workspace
