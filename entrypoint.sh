@@ -35,6 +35,7 @@ fi
 # Ensure gateway.controlUi.allowedOrigins includes this deployment's browser origin
 # (required for non-loopback Control UI; see README).
 python3 /app/patch-openclaw-origins.py
+python3 /app/patch-openclaw-branding.py
 
 # OpenClaw injects workspace bootstrap files (e.g. AGENTS.md) into the assistant system
 # context — see https://docs.openclaw.ai/concepts/system-prompt

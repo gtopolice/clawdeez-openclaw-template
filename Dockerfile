@@ -31,6 +31,7 @@ ENV LOG_LEVEL=error
 
 COPY entrypoint.sh /app/entrypoint.sh
 COPY patch-openclaw-origins.py /app/patch-openclaw-origins.py
-RUN chmod +x /app/entrypoint.sh /app/patch-openclaw-origins.py
+COPY patch-openclaw-branding.py /app/patch-openclaw-branding.py
+RUN chmod +x /app/entrypoint.sh /app/patch-openclaw-origins.py /app/patch-openclaw-branding.py
 
 ENTRYPOINT ["/app/entrypoint.sh"]
