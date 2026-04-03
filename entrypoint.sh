@@ -1,6 +1,13 @@
 #!/bin/bash
 set -euo pipefail
 
+# ClawDeez brand line in Railway logs (blue ANSI; harmless if stripped)
+CLAWDEEZ_DIM='\033[2m'
+CLAWDEEZ_BLUE='\033[0;34m'
+CLAWDEEZ_BOLD='\033[1;34m'
+CLR='\033[0m'
+echo -e "${CLAWDEEZ_BOLD}ClawDeez${CLR} ${CLAWDEEZ_DIM}·${CLR} ${CLAWDEEZ_BLUE}OpenClaw gateway on Railway${CLR} ${CLAWDEEZ_DIM}(template)${CLR}"
+
 mkdir -p "$OPENCLAW_STATE_DIR" "${OPENCLAW_WORKSPACE_DIR:-/data/workspace}"
 
 GATEWAY_PORT="${PORT:-18789}"
@@ -29,5 +36,5 @@ fi
 # (required for non-loopback Control UI; see README).
 python3 /app/patch-openclaw-origins.py
 
-echo "Starting OpenClaw Gateway..."
+echo -e "${CLAWDEEZ_BLUE}Starting OpenClaw gateway…${CLR}"
 exec openclaw gateway run --bind lan --port "$GATEWAY_PORT"

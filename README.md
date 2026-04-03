@@ -1,6 +1,18 @@
-# OpenClaw (Railway template)
+<!-- ClawDeez template branding: blue palette aligns with clawdeez.cloud -->
 
-This template runs the [OpenClaw](https://docs.openclaw.ai/) gateway on [Railway](https://railway.app/) with persistent `/data` and binds the gateway on all interfaces so the public URL works.
+<div align="center">
+
+[![ClawDeez](https://img.shields.io/badge/ClawDeez-agent%20hosting-2563eb?style=for-the-badge&labelColor=1e3a8a)](https://github.com/gtopolice/clawdeez-core)
+[![OpenClaw](https://img.shields.io/badge/Powered%20by-OpenClaw-1d4ed8?style=for-the-badge&labelColor=172554)](https://docs.openclaw.ai/)
+[![Railway](https://img.shields.io/badge/Deploy-Railway-0ea5e9?style=for-the-badge&labelColor=0c4a6e)](https://railway.app/)
+
+### ClawDeez · OpenClaw gateway (Railway)
+
+**Managed agent runtime template** for [ClawDeez](https://github.com/gtopolice/clawdeez-core): runs the upstream [OpenClaw](https://docs.openclaw.ai/) gateway on [Railway](https://railway.app/) with persistent `/data`, LAN binding for the public URL, and startup patches for Control UI origins (and optional device-auth bypass). OpenClaw is the engine; ClawDeez is the hosting and provisioning layer.
+
+</div>
+
+---
 
 ## Control UI and `allowedOrigins`
 
@@ -40,3 +52,7 @@ OpenClaw uses two layers: **gateway token** (secret) and **device pairing** (fir
 If ClawDeez (or another tool) provisions a Railway public hostname automatically, pass that same hostname into this template as **`OPENCLAW_PUBLIC_ORIGIN`** (or ensure **`RAILWAY_PUBLIC_DOMAIN`** matches the URL users open) so the allowlist stays aligned with the browser URL.
 
 When using [clawdeez-core](https://github.com/gtopolice/clawdeez-core) provisioning, set backend **`PROVISION_OPENCLAW_DISABLE_CONTROL_UI_DEVICE_AUTH=1`** to inject **`OPENCLAW_CONTROL_UI_DISABLE_DEVICE_AUTH=1`** on every new agent service (optional).
+
+### License and attribution
+
+OpenClaw is a separate project; follow its license for the CLI/runtime you install in the image. This repository is the **ClawDeez** Railway wrapper (Dockerfile, entrypoint, and origin patch). Do not imply endorsement by the OpenClaw project unless you have it.

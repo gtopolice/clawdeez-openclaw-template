@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""Merge Control UI settings into openclaw.json from env.
+"""ClawDeez Railway template — merge Control UI settings into openclaw.json from env.
+
+Upstream runtime is OpenClaw; this script is part of the ClawDeez provisioning layer.
 
 - allowedOrigins: OPENCLAW_PUBLIC_ORIGIN, RAILWAY_PUBLIC_DOMAIN, OPENCLAW_ALLOWED_ORIGINS
 - dangerouslyDisableDeviceAuth: OPENCLAW_CONTROL_UI_DISABLE_DEVICE_AUTH (opt-in; see README)
