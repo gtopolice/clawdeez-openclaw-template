@@ -1,5 +1,5 @@
 /**
- * ClawDeez: re-skin OpenClaw Control UI connect shell (Gateway Dashboard) using
+ * ClawDeez: re-skin OpenClaw Control UI (connect shell + sidebar/login chrome) using
  * payload in #clawdeez-brand-json (injected by patch-openclaw-branding.py).
  */
 (function () {
@@ -18,6 +18,30 @@
 
   var NAME = String(brand.assistantName);
   var SUB = brand.gatewaySubtitle != null ? String(brand.gatewaySubtitle) : "";
+  var AVATAR = brand.avatarUrl != null ? String(brand.avatarUrl).trim() : "";
+  var BAKED_LOGO = "./clawdeez-brand-logo.png";
+
+  function queryDeepAll(root, selector) {
+    var out = [];
+    if (!root || !root.querySelectorAll) return out;
+    try {
+      var found = root.querySelectorAll(selector);
+      var i;
+      for (i = 0; i < found.length; i++) out.push(found[i]);
+    } catch (e) {
+      /* ignore */
+    }
+    var all = root.querySelectorAll("*");
+    var j;
+    for (j = 0; j < all.length; j++) {
+      var sr = all[j].shadowRoot;
+      if (sr) {
+        var inner = queryDeepAll(sr, selector);
+        out.push.apply(out, inner);
+      }
+    }
+    return out;
+  }
 
   function walkTextNodes(root, fn) {
     var tw = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
@@ -52,8 +76,43 @@
     }
   }
 
+  /** OpenClaw hardcodes alt="OpenClaw" and favicon.svg in bundled templates. */
+  function applyLogosAndTitles() {
+    if (!document.body) return;
+    var root = document.body;
+    var imgs = queryDeepAll(root, "img");
+    var i;
+    for (i = 0; i < imgs.length; i++) {
+      var img = imgs[i];
+      if (img.getAttribute("alt") !== "OpenClaw") continue;
+      img.setAttribute("alt", NAME);
+      var current = img.src || "";
+      if (AVATAR.indexOf("http") === 0) {
+        img.src = AVATAR;
+      } else if (
+        current.indexOf("favicon.svg") !== -1 ||
+        current.indexOf("favicon.ico") !== -1 ||
+        !current
+      ) {
+        try {
+          img.src = new URL(BAKED_LOGO, window.location.href).href;
+        } catch (e2) {
+          img.setAttribute("src", BAKED_LOGO);
+        }
+      }
+    }
+    var titleEls = queryDeepAll(root, ".sidebar-brand__title, .login-gate__title");
+    for (i = 0; i < titleEls.length; i++) {
+      var te = titleEls[i];
+      if (te.textContent && te.textContent.trim() === "OpenClaw") {
+        te.textContent = NAME;
+      }
+    }
+  }
+
   function tick() {
     applyTitle();
+    applyLogosAndTitles();
     applyText();
   }
 

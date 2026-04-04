@@ -68,7 +68,7 @@ Prefer **fragments over query strings** so the token is not sent to the server o
 
 ### Control UI favicon (ClawDeez)
 
-At **image build**, the Dockerfile copies `clawdeez-control-ui-icons/` over OpenClaw’s `favicon.ico`, `favicon-32.png`, and `apple-touch-icon.png`, and points the primary `<link rel="icon">` at `favicon.ico` instead of `favicon.svg`. Source of truth: [clawdeez-core](https://github.com/gtopolice/clawdeez-core) `frontend/src/app` (`favicon.ico`, `icon.png` → `favicon-32.png`, `apple-icon.png` → `apple-touch-icon.png`) — re-copy into this repo when the marketing app icons change.
+At **image build**, the Dockerfile copies `clawdeez-control-ui-icons/` over OpenClaw’s `favicon.ico`, `favicon-32.png`, and `apple-touch-icon.png`, points the primary `<link rel="icon">` at `favicon.ico` instead of `favicon.svg`, copies **`clawdeez-brand-logo.png`** (ClawDeez wordmark from clawdeez-core `frontend/public/logo-transparent.png`), and replaces **`favicon.svg`** with `clawdeez-favicon.svg` (SVG wrapper around that PNG). OpenClaw’s sidebar/login templates reference `favicon.svg` via `wg()` in the bundle; overwriting that file removes the default red claw artwork. Browser-tab icons still use the Next-derived `favicon.ico` set above. Re-sync assets when the marketing app changes.
 
 ### Verify
 

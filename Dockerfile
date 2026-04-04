@@ -20,10 +20,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends git python3 pyt
 
 # ClawDeez favicons (synced from clawdeez-core frontend/src/app); overrides OpenClaw defaults in dist/control-ui
 COPY clawdeez-control-ui-icons/ /app/clawdeez-control-ui-icons/
+COPY clawdeez-favicon.svg /app/clawdeez-favicon.svg
 RUN UI="$(npm root -g)/openclaw/dist/control-ui" && \
     cp /app/clawdeez-control-ui-icons/favicon.ico "$UI/favicon.ico" && \
     cp /app/clawdeez-control-ui-icons/favicon-32.png "$UI/favicon-32.png" && \
     cp /app/clawdeez-control-ui-icons/apple-touch-icon.png "$UI/apple-touch-icon.png" && \
+    cp /app/clawdeez-control-ui-icons/clawdeez-brand-logo.png "$UI/clawdeez-brand-logo.png" && \
+    cp /app/clawdeez-favicon.svg "$UI/favicon.svg" && \
     sed -i 's|type="image/svg+xml" href="./favicon.svg"|type="image/x-icon" href="./favicon.ico"|' "$UI/index.html"
 
 COPY clawdeez-gateway-bootstrap.js /app/clawdeez-gateway-bootstrap.js
