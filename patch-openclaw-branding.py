@@ -4,7 +4,7 @@
 Reads Railway variables set by clawdeez-core provisioning (see backend `openclawProvisionBranding.ts`):
 
 - OPENCLAW_UI_ASSISTANT_NAME -> ui.assistant.name + Gateway Dashboard title/text overrides
-- OPENCLAW_UI_ASSISTANT_AVATAR -> ui.assistant.avatar (HTTPS image URL); favicons on connect page
+- OPENCLAW_UI_ASSISTANT_AVATAR -> ui.assistant.avatar (HTTPS image URL for in-app identity)
 - OPENCLAW_UI_SEAM_COLOR -> ui.seamColor; overrides --primary/--accent on connect shell
 - OPENCLAW_UI_GATEWAY_SUBTITLE -> replaces "Gateway Dashboard" (default: Panel del gateway)
 - OPENCLAW_CONTROL_UI_BRAND_CSS_URL -> optional extra stylesheet link
@@ -116,7 +116,6 @@ def build_brand_shell_block() -> str | None:
         payload = {
             "assistantName": name,
             "gatewaySubtitle": subtitle,
-            "avatarUrl": avatar,
         }
         lines.append(
             '<script type="application/json" id="clawdeez-brand-json">'

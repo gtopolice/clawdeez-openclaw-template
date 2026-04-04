@@ -66,6 +66,10 @@ Prefer **fragments over query strings** so the token is not sent to the server o
 
 **OpenClaw upgrades:** the inject step patches `openclaw`’s bundled `dist/control-ui/index.html` at **image build** time. If a future `openclaw` release changes that file layout, re-verify the Dockerfile `inject-clawdeez-gateway-bootstrap.py` step still runs cleanly.
 
+### Control UI favicon (ClawDeez)
+
+At **image build**, the Dockerfile copies `clawdeez-control-ui-icons/` over OpenClaw’s `favicon.ico`, `favicon-32.png`, and `apple-touch-icon.png`, and points the primary `<link rel="icon">` at `favicon.ico` instead of `favicon.svg`. Source of truth: [clawdeez-core](https://github.com/gtopolice/clawdeez-core) `frontend/src/app` (`favicon.ico`, `icon.png` → `favicon-32.png`, `apple-icon.png` → `apple-touch-icon.png`) — re-copy into this repo when the marketing app icons change.
+
 ### Verify
 
 1. Open `https://<your-service>.up.railway.app` (or your custom domain) at the Control UI path (e.g. `/chat` if that is how you reach the UI for your build).

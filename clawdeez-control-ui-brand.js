@@ -18,7 +18,6 @@
 
   var NAME = String(brand.assistantName);
   var SUB = brand.gatewaySubtitle != null ? String(brand.gatewaySubtitle) : "";
-  var AVATAR = brand.avatarUrl != null ? String(brand.avatarUrl).trim() : "";
 
   function walkTextNodes(root, fn) {
     var tw = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
@@ -53,16 +52,8 @@
     }
   }
 
-  function applyIcons() {
-    if (!AVATAR || AVATAR.indexOf("http") !== 0) return;
-    var links = document.querySelectorAll('link[rel="icon"], link[rel="apple-touch-icon"]');
-    var i;
-    for (i = 0; i < links.length; i++) links[i].href = AVATAR;
-  }
-
   function tick() {
     applyTitle();
-    applyIcons();
     applyText();
   }
 
