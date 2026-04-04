@@ -82,11 +82,20 @@ If ClawDeez (or another tool) provisions a Railway public hostname automatically
 
 When using [clawdeez-core](https://github.com/gtopolice/clawdeez-core) provisioning, new services get **`OPENCLAW_CONTROL_UI_DISABLE_DEVICE_AUTH=1`** by default (token-only Control UI). Set backend **`PROVISION_OPENCLAW_DISABLE_CONTROL_UI_DEVICE_AUTH=0`** to **skip** that injection and require device pairing instead.
 
-### Assistant workspace context (`AGENTS.md`)
+### Assistant workspace context (`AGENTS.md`, `IDENTITY.md`, `SOUL.md`, `USER.md`)
 
-On each container start (after `openclaw onboard` and the origin patch), the entrypoint **idempotently appends** a short **ClawDeez / Railway** section to **`AGENTS.md`** in the workspace (`OPENCLAW_WORKSPACE_DIR`, default `/data/workspace`). OpenClaw loads workspace bootstrap files into the assistant system prompt ([system prompt docs](https://docs.openclaw.ai/concepts/system-prompt)), so the model can answer “where are you hosted?” accurately instead of generic refusals.
+After `openclaw onboard` (which creates the default OpenClaw workspace files), the entrypoint **prepends** idempotent **ClawDeez** blocks (Spanish-first, Control UI scope, identity aligned with `OPENCLAW_UI_ASSISTANT_NAME`) to:
 
-The block includes **`OPENCLAW_PUBLIC_ORIGIN`** or **`RAILWAY_PUBLIC_DOMAIN`** when set. To refresh wording after an image upgrade, remove the HTML comment markers `<!-- clawdeez-hosting-context -->` (both) from `AGENTS.md` on the volume and redeploy once.
+- `AGENTS.md` (marker `<!-- clawdeez-scope -->`)
+- `IDENTITY.md` (marker `<!-- clawdeez-identity -->`)
+- `SOUL.md` (marker `<!-- clawdeez-soul -->`)
+- `USER.md` (marker `<!-- clawdeez-user-scope -->`)
+
+If a marker is already present, the prepend is skipped (safe across restarts). Set **`CLAWDEEZ_SKIP_WORKSPACE_FRAGMENTS=1`** on the Railway service to disable all prepends.
+
+Then, on each start, the entrypoint **appends** a short **ClawDeez / Railway** section to **`AGENTS.md`** (`<!-- clawdeez-hosting-context -->`). OpenClaw loads workspace bootstrap files into the assistant system prompt ([system prompt docs](https://docs.openclaw.ai/concepts/system-prompt)), so the model can answer “where are you hosted?” accurately instead of generic refusals.
+
+The hosting block includes **`OPENCLAW_PUBLIC_ORIGIN`** or **`RAILWAY_PUBLIC_DOMAIN`** when set. To refresh wording after an image upgrade, remove the HTML comment markers (`<!-- clawdeez-hosting-context -->` both ends, and/or the prepend markers above) from the relevant files on the volume and redeploy once.
 
 ### License and attribution
 

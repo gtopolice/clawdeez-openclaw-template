@@ -43,6 +43,8 @@ ENV OPENCLAW_WORKSPACE_DIR=/data/workspace
 # Force logs to ERROR to prevent prompt leakage in Railway dashboard
 ENV LOG_LEVEL=error 
 
+COPY workspace-fragments/ /app/workspace-fragments/
+
 COPY entrypoint.sh /app/entrypoint.sh
 COPY patch-openclaw-origins.py /app/patch-openclaw-origins.py
 COPY patch-openclaw-branding.py /app/patch-openclaw-branding.py

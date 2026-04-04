@@ -37,6 +37,50 @@ fi
 python3 /app/patch-openclaw-origins.py
 python3 /app/patch-openclaw-branding.py
 
+# Idempotent ClawDeez fragments (Spanish-first, Control UI scope, identity name). Skips if markers exist.
+# Disable with CLAWDEEZ_SKIP_WORKSPACE_FRAGMENTS=1. Runs after onboard so upstream workspace files exist.
+clawdeez_apply_workspace_fragments() {
+    local ws="${OPENCLAW_WORKSPACE_DIR:-/data/workspace}"
+    if [[ "${CLAWDEEZ_SKIP_WORKSPACE_FRAGMENTS:-0}" == "1" ]]; then
+        return 0
+    fi
+    mkdir -p "$ws"
+    # Empty when Railway omits OPENCLAW_UI_ASSISTANT_NAME so OpenClaw onboard defaults apply in the UI.
+    export CLAWDEEZ_ASSISTANT_NAME="${OPENCLAW_UI_ASSISTANT_NAME:-}"
+    python3 -c '
+import os, pathlib
+src = pathlib.Path("/app/workspace-fragments/clawdeez-identity.md").read_text(encoding="utf-8")
+raw = os.environ.get("CLAWDEEZ_ASSISTANT_NAME", "").strip()
+fallback = "_(sin nombre fijado por ClawDeez; la UI usa la configuración por defecto de OpenClaw hasta que el usuario defina el nombre — p. ej. `OPENCLAW_UI_ASSISTANT_NAME` o IDENTITY.md)_"
+display = raw if raw else fallback
+pathlib.Path("/tmp/clawdeez-identity-resolved.md").write_text(
+    src.replace("__CLAWDEEZ_ASSISTANT_NAME__", display), encoding="utf-8"
+)
+'
+    clawdeez_prepend_if_absent() {
+        local target="$1"
+        local marker="$2"
+        local fragment_path="$3"
+        [[ -f "$target" ]] || return 0
+        grep -qF "$marker" "$target" 2>/dev/null && return 0
+        local tmp
+        tmp="$(mktemp)"
+        cat "$fragment_path" "$target" >"$tmp"
+        mv "$tmp" "$target"
+    }
+    clawdeez_prepend_if_absent "$ws/AGENTS.md" "<!-- clawdeez-scope -->" \
+        "/app/workspace-fragments/clawdeez-preamble-agents.md"
+    clawdeez_prepend_if_absent "$ws/IDENTITY.md" "<!-- clawdeez-identity -->" \
+        "/tmp/clawdeez-identity-resolved.md"
+    clawdeez_prepend_if_absent "$ws/SOUL.md" "<!-- clawdeez-soul -->" \
+        "/app/workspace-fragments/clawdeez-soul-prefix.md"
+    clawdeez_prepend_if_absent "$ws/USER.md" "<!-- clawdeez-user-scope -->" \
+        "/app/workspace-fragments/clawdeez-user-prefix.md"
+    rm -f /tmp/clawdeez-identity-resolved.md
+}
+
+clawdeez_apply_workspace_fragments
+
 # OpenClaw injects workspace bootstrap files (e.g. AGENTS.md) into the assistant system
 # context — see https://docs.openclaw.ai/concepts/system-prompt
 clawdeez_append_workspace_hosting_context() {
