@@ -32,9 +32,10 @@ This template sets `gateway.controlUi.allowedOrigins` in `openclaw.json` **on ev
 | `OPENCLAW_UI_ASSISTANT_NAME` | ClawDeez: merged into `ui.assistant.name` in `openclaw.json` on each start (Control UI title / identity). |
 | `OPENCLAW_UI_ASSISTANT_AVATAR` | HTTPS URL, emoji, or short text for `ui.assistant.avatar` (e.g. hosted logo). |
 | `OPENCLAW_UI_SEAM_COLOR` | Hex accent for `ui.seamColor` (e.g. ClawDeez `#2563eb`). |
+| `OPENCLAW_UI_GATEWAY_SUBTITLE` | Replaces the connect screen string **Gateway Dashboard** (default when unset: `Panel del gateway`). Optional `PROVISION_OPENCLAW_GATEWAY_SUBTITLE` on the clawdeez-core backend passes through on provision. |
 | `OPENCLAW_CONTROL_UI_BRAND_CSS_URL` | Optional HTTPS URL to a stylesheet; injected into bundled Control UI `index.html` on start when writable (best-effort). |
 
-Startup runs `patch-openclaw-branding.py` after `patch-openclaw-origins.py` to apply the branding variables above. [clawdeez-core](https://github.com/gtopolice/clawdeez-core) provisioning sets these from `PROVISION_CLAWDEEZ_PUBLIC_ORIGIN` and related `PROVISION_OPENCLAW_BRAND_*` backend env vars.
+Startup runs `patch-openclaw-branding.py` after `patch-openclaw-origins.py` to merge `openclaw.json` `ui.*`, patch **Gateway Dashboard** / connect chrome (CSS variables + title + `clawdeez-control-ui-brand.js`), and add the optional extra stylesheet. [clawdeez-core](https://github.com/gtopolice/clawdeez-core) provisioning sets these from `PROVISION_CLAWDEEZ_PUBLIC_ORIGIN` and related `PROVISION_OPENCLAW_BRAND_*` backend env vars.
 
 If none of the origin-related variables yield an origin, the patch step still runs when `OPENCLAW_CONTROL_UI_DISABLE_DEVICE_AUTH` is enabled (origins-only merge is skipped in that case).
 

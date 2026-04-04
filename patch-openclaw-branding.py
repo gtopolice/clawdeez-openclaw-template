@@ -1,31 +1,23 @@
 #!/usr/bin/env python3
-"""Merge ClawDeez branding into OpenClaw config and optional Control UI stylesheet link.
+"""Merge ClawDeez branding into OpenClaw config and Control UI (connect shell + chat).
 
 Reads Railway variables set by clawdeez-core provisioning (see backend `openclawProvisionBranding.ts`):
 
-- OPENCLAW_UI_ASSISTANT_NAME -> ui.assistant.name
-- OPENCLAW_UI_ASSISTANT_AVATAR -> ui.assistant.avatar (HTTPS image URL)
-- OPENCLAW_UI_SEAM_COLOR -> ui.seamColor
-- OPENCLAW_CONTROL_UI_BRAND_CSS_URL -> inject <link rel="stylesheet"> into control-ui index.html
+- OPENCLAW_UI_ASSISTANT_NAME -> ui.assistant.name + Gateway Dashboard title/text overrides
+- OPENCLAW_UI_ASSISTANT_AVATAR -> ui.assistant.avatar (HTTPS image URL); favicons on connect page
+- OPENCLAW_UI_SEAM_COLOR -> ui.seamColor; overrides --primary/--accent on connect shell
+- OPENCLAW_UI_GATEWAY_SUBTITLE -> replaces "Gateway Dashboard" (default: Panel del gateway)
+- OPENCLAW_CONTROL_UI_BRAND_CSS_URL -> optional extra stylesheet link
 
-Wire-up in [clawdeez-openclaw-template](https://github.com/gtopolice/clawdeez-openclaw-template):
-
-**Dockerfile** (with the other COPY/chmod lines for entrypoint and origins):
-
-  COPY patch-openclaw-branding.py /app/patch-openclaw-branding.py
-  RUN chmod +x /app/patch-openclaw-branding.py
-  # append branding to the existing chmod line that lists entrypoint + origins, e.g.:
-  # RUN chmod +x /app/entrypoint.sh /app/patch-openclaw-origins.py /app/patch-openclaw-branding.py
-
-**entrypoint.sh** (immediately after `python3 /app/patch-openclaw-origins.py`):
-
-  python3 /app/patch-openclaw-branding.py
+Wire-up: see [clawdeez-openclaw-template](https://github.com/gtopolice/clawdeez-openclaw-template).
 """
 from __future__ import annotations
 
+import html
 import json
 import os
 import pathlib
+import re
 import subprocess
 import sys
 
@@ -33,6 +25,23 @@ import sys
 def npm_global_root() -> pathlib.Path:
     out = subprocess.check_output(["npm", "root", "-g"], text=True).strip()
     return pathlib.Path(out)
+
+
+SHELL_START = "<!-- clawdeez-brand-shell-start -->"
+SHELL_END = "<!-- clawdeez-brand-shell-end -->"
+
+
+def accent_hover(base_hex: str) -> str:
+    raw = base_hex.strip().lstrip("#")
+    if len(raw) != 6 or not re.fullmatch(r"[0-9a-fA-F]{6}", raw):
+        return "#1d4ed8"
+    r = int(raw[0:2], 16)
+    g = int(raw[2:4], 16)
+    b = int(raw[4:6], 16)
+    r = max(0, min(255, int(r * 0.88)))
+    g = max(0, min(255, int(g * 0.88)))
+    b = max(0, min(255, int(b * 0.92)))
+    return f"#{r:02x}{g:02x}{b:02x}"
 
 
 def merge_ui_from_env(cfg: dict) -> bool:
@@ -74,11 +83,52 @@ def patch_openclaw_json() -> None:
     print("Merged ClawDeez UI branding into", path, file=sys.stderr)
 
 
-def inject_brand_stylesheet() -> None:
-    url = os.environ.get("OPENCLAW_CONTROL_UI_BRAND_CSS_URL", "").strip()
-    if not url:
-        return
+def strip_brand_shell(html_text: str) -> str:
+    pattern = re.escape(SHELL_START) + r".*?" + re.escape(SHELL_END)
+    return re.sub(pattern, "", html_text, flags=re.DOTALL)
 
+
+def build_brand_shell_block() -> str | None:
+    name = os.environ.get("OPENCLAW_UI_ASSISTANT_NAME", "").strip()
+    seam = os.environ.get("OPENCLAW_UI_SEAM_COLOR", "").strip()
+    avatar = os.environ.get("OPENCLAW_UI_ASSISTANT_AVATAR", "").strip()
+    subtitle = os.environ.get("OPENCLAW_UI_GATEWAY_SUBTITLE", "").strip() or "Panel del gateway"
+
+    if not name and not seam and not avatar:
+        return None
+
+    accent = seam or "#2563eb"
+    hover = accent_hover(accent)
+    subtle = accent + "1a" if accent.startswith("#") and len(accent) == 7 else "#2563eb1a"
+    glow = accent + "33" if accent.startswith("#") and len(accent) == 7 else "#2563eb33"
+
+    lines = [
+        SHELL_START,
+        '<style type="text/css" data-clawdeez-brand-shell="1">',
+        ":root{",
+        f"--accent:{accent}!important;--primary:{accent}!important;--ring:{accent}!important;",
+        f"--accent-hover:{hover}!important;--accent-muted:{accent}!important;",
+        f"--accent-subtle:{subtle}!important;--accent-glow:{glow}!important;",
+        "}",
+        "</style>",
+    ]
+    if name:
+        payload = {
+            "assistantName": name,
+            "gatewaySubtitle": subtitle,
+            "avatarUrl": avatar,
+        }
+        lines.append(
+            '<script type="application/json" id="clawdeez-brand-json">'
+            + json.dumps(payload, ensure_ascii=False)
+            + "</script>"
+        )
+        lines.append('<script defer src="./clawdeez-control-ui-brand.js"></script>')
+    lines.append(SHELL_END)
+    return "\n".join(lines) + "\n"
+
+
+def patch_control_ui_index_html() -> None:
     ui_dir = npm_global_root() / "openclaw" / "dist" / "control-ui"
     index = ui_dir / "index.html"
     if not index.is_file():
@@ -86,21 +136,31 @@ def inject_brand_stylesheet() -> None:
         return
 
     text = index.read_text(encoding="utf-8")
-    marker = 'data-clawdeez-brand-css="1"'
-    if marker in text:
-        return
+    updated = strip_brand_shell(text)
 
-    link = f'  <link rel="stylesheet" href="{url}" {marker} />\n'
-    if "</head>" in text:
-        text = text.replace("</head>", link + "</head>", 1)
-    elif "</body>" in text:
-        text = text.replace("</body>", link + "</body>", 1)
-    else:
-        print("No </head> or </body> in control-ui index.html", file=sys.stderr)
-        return
+    name = os.environ.get("OPENCLAW_UI_ASSISTANT_NAME", "").strip()
+    if name:
+        updated = re.sub(
+            r"<title>[^<]*</title>",
+            f"<title>{html.escape(name)} · Control</title>",
+            updated,
+            count=1,
+        )
 
-    index.write_text(text, encoding="utf-8")
-    print("Injected ClawDeez brand stylesheet link into", index, file=sys.stderr)
+    css_url = os.environ.get("OPENCLAW_CONTROL_UI_BRAND_CSS_URL", "").strip()
+    css_marker = 'data-clawdeez-brand-css="1"'
+    if css_url and css_marker not in updated:
+        link = f'  <link rel="stylesheet" href="{html.escape(css_url)}" {css_marker} />\n'
+        if "</head>" in updated:
+            updated = updated.replace("</head>", link + "</head>", 1)
+
+    shell = build_brand_shell_block()
+    if shell and "</head>" in updated:
+        updated = updated.replace("</head>", shell + "</head>", 1)
+
+    if updated != text:
+        index.write_text(updated, encoding="utf-8")
+        print("Patched ClawDeez shell into", index, file=sys.stderr)
 
 
 def main() -> int:
@@ -110,11 +170,10 @@ def main() -> int:
         print("patch-openclaw-branding (openclaw.json):", e, file=sys.stderr)
         return 1
     try:
-        inject_brand_stylesheet()
+        patch_control_ui_index_html()
     except OSError as e:
-        # Global npm openclaw path may be read-only on some hosts; UI config still applies.
         print(
-            "patch-openclaw-branding (stylesheet inject, non-fatal):",
+            "patch-openclaw-branding (control-ui index, non-fatal):",
             e,
             file=sys.stderr,
         )
