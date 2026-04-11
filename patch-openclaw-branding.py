@@ -35,15 +35,16 @@ def _compaction_floor_ceiling_from_injected_model() -> tuple[int, int]:
     m = os.environ.get("INJECTED_OR_MODEL", "").strip()
     if m == _INJECTED_ADVANCED:
         return (98304, 200000)
+    # 16k ctx: large reserveTokensFloor steals budget from system+workspace; keep floor/cap modest.
     if m == _INJECTED_MEDIUM:
-        return (6144, 8192)
+        return (3072, 4096)
     if m == _INJECTED_FREE:
-        return (4096, 6144)
+        return (2048, 3072)
     if m.startswith("openrouter/auto:free") and "*-small*" in m:
-        return (6144, 8192)
+        return (3072, 4096)
     if m.startswith("openrouter/free"):
-        return (4096, 6144)
-    return (6144, 8192)
+        return (2048, 3072)
+    return (3072, 4096)
 
 
 def npm_global_root() -> pathlib.Path:
