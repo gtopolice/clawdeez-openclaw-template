@@ -8,7 +8,7 @@ Reads Railway variables set by clawdeez-core provisioning (see backend `openclaw
 - OPENCLAW_UI_SEAM_COLOR -> ui.seamColor; overrides --primary/--accent on connect shell
 - OPENCLAW_UI_GATEWAY_SUBTITLE -> replaces "Gateway Dashboard" (default: Panel del gateway)
 - OPENCLAW_CONTROL_UI_BRAND_CSS_URL -> optional extra stylesheet (HTTPS); if unset, ./openclaw-control-ui-brand.css bundled in the image (same-origin, CSP-safe)
-- OPENCLAW_COMPACTION_RESERVE_TOKENS_FLOOR -> minimum `agents.defaults.compaction.reserveTokensFloor` (default **98304**; ClawDeez workspace bootstrap + Medium tier needs a large compaction buffer). Set to **0** / **skip** to skip merging.
+- OPENCLAW_COMPACTION_RESERVE_TOKENS_FLOOR -> minimum `agents.defaults.compaction.reserveTokensFloor` (default depends on **INJECTED_OR_MODEL**: `openrouter/auto` → high floor; MEDIUM/ FREE constrained routes → modest floor so ~16k ctx models are not starved). Set to **0** / **skip** to skip merging.
 
 Wire-up: see [clawdeez-openclaw-template](https://github.com/gtopolice/clawdeez-openclaw-template).
 """
@@ -22,10 +22,28 @@ import re
 import subprocess
 import sys
 
-# Default minimum reserve for compaction (agents.defaults.compaction.reserveTokensFloor).
-# Below ~20k OpenClaw surfaces "Context limit exceeded" in Control UI; ClawDeez prepends
-# workspace fragments (AGENTS.md, etc.) so we use a high floor without changing model tier.
-_DEFAULT_COMPACTION_RESERVE_TOKENS_FLOOR = 98304
+# Mirrors `packages/clawdeez-config` OPENCLAW_COMPACTION_RESERVE_TOKENS_FLOOR_BY_TIER + ceilings.
+# MEDIUM (`openrouter/auto:free,*-small*…`) often resolves to ~16k ctx — a floor near the
+# context size makes `promptBudgetBeforeReserve` collapse and triggers immediate overflow.
+_INJECTED_ADVANCED = "openrouter/auto"
+_INJECTED_MEDIUM = "openrouter/auto:free,*-small*,*-mini*,*-nano*,*-flash*"
+_INJECTED_FREE = "openrouter/free"
+
+
+def _compaction_floor_ceiling_from_injected_model() -> tuple[int, int]:
+    """Return (default_floor, max_allowed) for reserveTokensFloor."""
+    m = os.environ.get("INJECTED_OR_MODEL", "").strip()
+    if m == _INJECTED_ADVANCED:
+        return (98304, 200000)
+    if m == _INJECTED_MEDIUM:
+        return (6144, 8192)
+    if m == _INJECTED_FREE:
+        return (4096, 6144)
+    if m.startswith("openrouter/auto:free") and "*-small*" in m:
+        return (6144, 8192)
+    if m.startswith("openrouter/free"):
+        return (4096, 6144)
+    return (6144, 8192)
 
 
 def npm_global_root() -> pathlib.Path:
@@ -71,13 +89,14 @@ def merge_ui_from_env(cfg: dict) -> bool:
 
 
 def merge_compaction_reserve_floor(cfg: dict) -> bool:
-    """Ensure compaction reserve floor is high enough (Medium tier + long model routing + workspace)."""
+    """Merge reserveTokensFloor; cap by INJECTED_OR_MODEL so small-context routes do not overflow."""
+    floor_default, ceiling = _compaction_floor_ceiling_from_injected_model()
     raw = os.environ.get(
         "OPENCLAW_COMPACTION_RESERVE_TOKENS_FLOOR",
-        str(_DEFAULT_COMPACTION_RESERVE_TOKENS_FLOOR),
+        str(floor_default),
     ).strip()
     if not raw:
-        raw = str(_DEFAULT_COMPACTION_RESERVE_TOKENS_FLOOR)
+        raw = str(floor_default)
     if raw.lower() in ("0", "false", "off", "skip", "none"):
         return False
     try:
@@ -85,12 +104,13 @@ def merge_compaction_reserve_floor(cfg: dict) -> bool:
     except ValueError:
         print(
             "OPENCLAW_COMPACTION_RESERVE_TOKENS_FLOOR invalid; using",
-            _DEFAULT_COMPACTION_RESERVE_TOKENS_FLOOR,
+            floor_default,
             file=sys.stderr,
         )
-        floor_min = _DEFAULT_COMPACTION_RESERVE_TOKENS_FLOOR
+        floor_min = floor_default
     if floor_min < 0:
         return False
+    floor_min = min(floor_min, ceiling)
     agents = cfg.setdefault("agents", {})
     defaults = agents.setdefault("defaults", {})
     compaction = defaults.setdefault("compaction", {})
@@ -99,7 +119,7 @@ def merge_compaction_reserve_floor(cfg: dict) -> bool:
         current = int(cur_raw) if cur_raw is not None else 0
     except (TypeError, ValueError):
         current = 0
-    new_val = max(floor_min, current)
+    new_val = min(max(floor_min, current), ceiling)
     if compaction.get("reserveTokensFloor") == new_val:
         return False
     compaction["reserveTokensFloor"] = new_val
