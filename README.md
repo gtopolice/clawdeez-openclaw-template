@@ -33,9 +33,10 @@ This template sets `gateway.controlUi.allowedOrigins` in `openclaw.json` **on ev
 | `OPENCLAW_UI_ASSISTANT_AVATAR` | HTTPS URL, emoji, or short text for `ui.assistant.avatar` (e.g. hosted logo). |
 | `OPENCLAW_UI_SEAM_COLOR` | Hex accent for `ui.seamColor` (e.g. ClawDeez `#2563eb`). |
 | `OPENCLAW_UI_GATEWAY_SUBTITLE` | Replaces the connect screen string **Gateway Dashboard** (default when unset: `Panel del gateway`). Optional `PROVISION_OPENCLAW_GATEWAY_SUBTITLE` on the clawdeez-core backend passes through on provision. |
-| `OPENCLAW_CONTROL_UI_BRAND_CSS_URL` | Optional HTTPS URL to a stylesheet; injected into bundled Control UI `index.html` on start when writable (best-effort). |
+| `OPENCLAW_CONTROL_UI_BRAND_CSS_URL` | Optional HTTPS URL to an **extra** stylesheet (must satisfy OpenClaw’s `style-src` CSP). If unset, the image’s bundled `./openclaw-control-ui-brand.css` is linked (same origin — avoids cross-domain blocks on `*.clawdeez.cloud` vs apex). |
+| `OPENCLAW_COMPACTION_RESERVE_TOKENS_FLOOR` | Merges `agents.defaults.compaction.reserveTokensFloor` into `openclaw.json` on each start (default **20000**). Reduces **“Context limit exceeded”** in Control UI chat (especially Medium tier / broad model lists). Set to `0` or `skip` to leave compaction untouched. |
 
-Startup runs `patch-openclaw-branding.py` after `patch-openclaw-origins.py` to merge `openclaw.json` `ui.*`, patch **Gateway Dashboard** / connect chrome (CSS variables + title + `clawdeez-control-ui-brand.js`), and add the optional extra stylesheet. [clawdeez-core](https://github.com/gtopolice/clawdeez-core) provisioning sets these from `PROVISION_CLAWDEEZ_PUBLIC_ORIGIN` and related `PROVISION_OPENCLAW_BRAND_*` backend env vars.
+Startup runs `patch-openclaw-branding.py` after `patch-openclaw-origins.py` to merge `openclaw.json` `ui.*`, **compaction defaults**, patch **Gateway Dashboard** / connect chrome (CSS variables + title + `clawdeez-control-ui-brand.js`), and link the bundled stylesheet (or optional override URL). [clawdeez-core](https://github.com/gtopolice/clawdeez-core) provisioning sets `OPENCLAW_UI_*` from `PROVISION_CLAWDEEZ_PUBLIC_ORIGIN` and related `PROVISION_OPENCLAW_BRAND_*` backend env vars; it no longer points the default CSS at the marketing apex (that URL was blocked by CSP).
 
 If none of the origin-related variables yield an origin, the patch step still runs when `OPENCLAW_CONTROL_UI_DISABLE_DEVICE_AUTH` is enabled (origins-only merge is skipped in that case).
 

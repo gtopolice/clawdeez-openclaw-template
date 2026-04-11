@@ -1,0 +1,16 @@
+/**
+ * Bundled next to OpenClaw Control UI index.html (same origin — CSP-safe).
+ * Optional override: Railway OPENCLAW_CONTROL_UI_BRAND_CSS_URL (external URLs must be
+ * allowed by OpenClaw’s style-src; prefer this file for ClawDeez deployments).
+ *
+ * OpenClaw uses shadow DOM in places; these rules only affect light-DOM chrome.
+ */
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body {
+  background-color: #09090b !important;
+}

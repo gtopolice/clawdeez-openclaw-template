@@ -30,12 +30,14 @@ RUN UI="$(npm root -g)/openclaw/dist/control-ui" && \
     cp /app/clawdeez-favicon.svg "$UI/favicon.svg" && \
     sed -i 's|type="image/svg+xml" href="./favicon.svg"|type="image/x-icon" href="./favicon.ico"|' "$UI/index.html"
 
+COPY openclaw-control-ui-brand.css /app/openclaw-control-ui-brand.css
 COPY clawdeez-gateway-bootstrap.js /app/clawdeez-gateway-bootstrap.js
 COPY clawdeez-control-ui-brand.js /app/clawdeez-control-ui-brand.js
 COPY inject-clawdeez-gateway-bootstrap.py /app/inject-clawdeez-gateway-bootstrap.py
 RUN chmod +x /app/inject-clawdeez-gateway-bootstrap.py && \
     python3 /app/inject-clawdeez-gateway-bootstrap.py && \
-    cp /app/clawdeez-control-ui-brand.js "$(npm root -g)/openclaw/dist/control-ui/clawdeez-control-ui-brand.js"
+    cp /app/clawdeez-control-ui-brand.js "$(npm root -g)/openclaw/dist/control-ui/clawdeez-control-ui-brand.js" && \
+    cp /app/openclaw-control-ui-brand.css "$(npm root -g)/openclaw/dist/control-ui/openclaw-control-ui-brand.css"
 
 # Set standard environment variables for persistence
 ENV OPENCLAW_STATE_DIR=/data/.openclaw

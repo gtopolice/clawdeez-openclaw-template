@@ -7,7 +7,8 @@ Reads Railway variables set by clawdeez-core provisioning (see backend `openclaw
 - OPENCLAW_UI_ASSISTANT_AVATAR -> ui.assistant.avatar; optional HTTPS override for Control UI logos
 - OPENCLAW_UI_SEAM_COLOR -> ui.seamColor; overrides --primary/--accent on connect shell
 - OPENCLAW_UI_GATEWAY_SUBTITLE -> replaces "Gateway Dashboard" (default: Panel del gateway)
-- OPENCLAW_CONTROL_UI_BRAND_CSS_URL -> optional extra stylesheet link
+- OPENCLAW_CONTROL_UI_BRAND_CSS_URL -> optional extra stylesheet (HTTPS); if unset, ./openclaw-control-ui-brand.css bundled in the image (same-origin, CSP-safe)
+- OPENCLAW_COMPACTION_RESERVE_TOKENS_FLOOR -> sets agents.defaults.compaction.reserveTokensFloor in openclaw.json (default **20000**; avoids Control UI "Context limit exceeded" on tiered OpenRouter models). Set to **0** / **skip** to leave compaction unchanged.
 
 Wire-up: see [clawdeez-openclaw-template](https://github.com/gtopolice/clawdeez-openclaw-template).
 """
@@ -64,6 +65,28 @@ def merge_ui_from_env(cfg: dict) -> bool:
     return True
 
 
+def merge_compaction_reserve_floor(cfg: dict) -> bool:
+    """Raise compaction buffer so chat does not hit context limits (esp. Medium tier model lists)."""
+    raw = os.environ.get("OPENCLAW_COMPACTION_RESERVE_TOKENS_FLOOR", "20000").strip()
+    if not raw:
+        raw = "20000"
+    if raw.lower() in ("0", "false", "off", "skip", "none"):
+        return False
+    try:
+        n = int(raw, 10)
+    except ValueError:
+        return False
+    if n < 0:
+        return False
+    agents = cfg.setdefault("agents", {})
+    defaults = agents.setdefault("defaults", {})
+    compaction = defaults.setdefault("compaction", {})
+    if compaction.get("reserveTokensFloor") == n:
+        return False
+    compaction["reserveTokensFloor"] = n
+    return True
+
+
 def patch_openclaw_json() -> None:
     state_dir = os.environ.get("OPENCLAW_STATE_DIR", os.path.expanduser("~/.openclaw"))
     path = os.path.join(state_dir, "openclaw.json")
@@ -73,14 +96,16 @@ def patch_openclaw_json() -> None:
     with open(path, encoding="utf-8") as f:
         cfg = json.load(f)
 
-    if not merge_ui_from_env(cfg):
+    changed = merge_ui_from_env(cfg)
+    changed = merge_compaction_reserve_floor(cfg) or changed
+    if not changed:
         return
 
     with open(path, "w", encoding="utf-8") as f:
         json.dump(cfg, f, indent=2)
         f.write("\n")
 
-    print("Merged ClawDeez UI branding into", path, file=sys.stderr)
+    print("Merged ClawDeez config into", path, file=sys.stderr)
 
 
 def strip_brand_shell(html_text: str) -> str:
@@ -148,6 +173,11 @@ def patch_control_ui_index_html() -> None:
         )
 
     css_url = os.environ.get("OPENCLAW_CONTROL_UI_BRAND_CSS_URL", "").strip()
+    bundled_css = ui_dir / "openclaw-control-ui-brand.css"
+    if not css_url and bundled_css.is_file():
+        # Same-origin avoids OpenClaw Control UI CSP blocking cross-domain stylesheets
+        # (e.g. apex marketing site vs *.clawdeez.cloud gateway).
+        css_url = "./openclaw-control-ui-brand.css"
     css_marker = 'data-clawdeez-brand-css="1"'
     if css_url and css_marker not in updated:
         link = f'  <link rel="stylesheet" href="{html.escape(css_url)}" {css_marker} />\n'
