@@ -8,7 +8,7 @@ Reads Railway variables set by clawdeez-core provisioning (see backend `openclaw
 - OPENCLAW_UI_SEAM_COLOR -> ui.seamColor; overrides --primary/--accent on connect shell
 - OPENCLAW_UI_GATEWAY_SUBTITLE -> replaces "Gateway Dashboard" (default: Panel del gateway)
 - OPENCLAW_CONTROL_UI_BRAND_CSS_URL -> optional extra stylesheet (HTTPS); if unset, ./openclaw-control-ui-brand.css bundled in the image (same-origin, CSP-safe)
-- OPENCLAW_COMPACTION_RESERVE_TOKENS_FLOOR -> sets agents.defaults.compaction.reserveTokensFloor in openclaw.json (default **20000**; avoids Control UI "Context limit exceeded" on tiered OpenRouter models). Set to **0** / **skip** to leave compaction unchanged.
+- OPENCLAW_COMPACTION_RESERVE_TOKENS_FLOOR -> minimum `agents.defaults.compaction.reserveTokensFloor` (default **48000**; Medium tier + workspace context needs more than 20k). Set to **0** / **skip** to skip merging.
 
 Wire-up: see [clawdeez-openclaw-template](https://github.com/gtopolice/clawdeez-openclaw-template).
 """
@@ -66,24 +66,30 @@ def merge_ui_from_env(cfg: dict) -> bool:
 
 
 def merge_compaction_reserve_floor(cfg: dict) -> bool:
-    """Raise compaction buffer so chat does not hit context limits (esp. Medium tier model lists)."""
-    raw = os.environ.get("OPENCLAW_COMPACTION_RESERVE_TOKENS_FLOOR", "20000").strip()
+    """Ensure compaction reserve floor is high enough (Medium tier + long model routing + workspace)."""
+    raw = os.environ.get("OPENCLAW_COMPACTION_RESERVE_TOKENS_FLOOR", "48000").strip()
     if not raw:
-        raw = "20000"
+        raw = "48000"
     if raw.lower() in ("0", "false", "off", "skip", "none"):
         return False
     try:
-        n = int(raw, 10)
+        floor_min = int(raw, 10)
     except ValueError:
         return False
-    if n < 0:
+    if floor_min < 0:
         return False
     agents = cfg.setdefault("agents", {})
     defaults = agents.setdefault("defaults", {})
     compaction = defaults.setdefault("compaction", {})
-    if compaction.get("reserveTokensFloor") == n:
+    cur_raw = compaction.get("reserveTokensFloor")
+    try:
+        current = int(cur_raw) if cur_raw is not None else 0
+    except (TypeError, ValueError):
+        current = 0
+    new_val = max(floor_min, current)
+    if compaction.get("reserveTokensFloor") == new_val:
         return False
-    compaction["reserveTokensFloor"] = n
+    compaction["reserveTokensFloor"] = new_val
     return True
 
 
