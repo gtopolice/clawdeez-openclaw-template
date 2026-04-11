@@ -8,7 +8,7 @@ Reads Railway variables set by clawdeez-core provisioning (see backend `openclaw
 - OPENCLAW_UI_SEAM_COLOR -> ui.seamColor; overrides --primary/--accent on connect shell
 - OPENCLAW_UI_GATEWAY_SUBTITLE -> replaces "Gateway Dashboard" (default: Panel del gateway)
 - OPENCLAW_CONTROL_UI_BRAND_CSS_URL -> optional extra stylesheet (HTTPS); if unset, ./openclaw-control-ui-brand.css bundled in the image (same-origin, CSP-safe)
-- OPENCLAW_COMPACTION_RESERVE_TOKENS_FLOOR -> minimum `agents.defaults.compaction.reserveTokensFloor` (default **48000**; Medium tier + workspace context needs more than 20k). Set to **0** / **skip** to skip merging.
+- OPENCLAW_COMPACTION_RESERVE_TOKENS_FLOOR -> minimum `agents.defaults.compaction.reserveTokensFloor` (default **98304**; ClawDeez workspace bootstrap + Medium tier needs a large compaction buffer). Set to **0** / **skip** to skip merging.
 
 Wire-up: see [clawdeez-openclaw-template](https://github.com/gtopolice/clawdeez-openclaw-template).
 """
@@ -21,6 +21,11 @@ import pathlib
 import re
 import subprocess
 import sys
+
+# Default minimum reserve for compaction (agents.defaults.compaction.reserveTokensFloor).
+# Below ~20k OpenClaw surfaces "Context limit exceeded" in Control UI; ClawDeez prepends
+# workspace fragments (AGENTS.md, etc.) so we use a high floor without changing model tier.
+_DEFAULT_COMPACTION_RESERVE_TOKENS_FLOOR = 98304
 
 
 def npm_global_root() -> pathlib.Path:
@@ -67,15 +72,23 @@ def merge_ui_from_env(cfg: dict) -> bool:
 
 def merge_compaction_reserve_floor(cfg: dict) -> bool:
     """Ensure compaction reserve floor is high enough (Medium tier + long model routing + workspace)."""
-    raw = os.environ.get("OPENCLAW_COMPACTION_RESERVE_TOKENS_FLOOR", "48000").strip()
+    raw = os.environ.get(
+        "OPENCLAW_COMPACTION_RESERVE_TOKENS_FLOOR",
+        str(_DEFAULT_COMPACTION_RESERVE_TOKENS_FLOOR),
+    ).strip()
     if not raw:
-        raw = "48000"
+        raw = str(_DEFAULT_COMPACTION_RESERVE_TOKENS_FLOOR)
     if raw.lower() in ("0", "false", "off", "skip", "none"):
         return False
     try:
         floor_min = int(raw, 10)
     except ValueError:
-        return False
+        print(
+            "OPENCLAW_COMPACTION_RESERVE_TOKENS_FLOOR invalid; using",
+            _DEFAULT_COMPACTION_RESERVE_TOKENS_FLOOR,
+            file=sys.stderr,
+        )
+        floor_min = _DEFAULT_COMPACTION_RESERVE_TOKENS_FLOOR
     if floor_min < 0:
         return False
     agents = cfg.setdefault("agents", {})
