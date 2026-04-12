@@ -19,6 +19,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends git python3 pyt
     npm install -g "openclaw@${OPENCLAW_VERSION}" && \
     openclaw --version
 
+# OpenClaw's ensurePiCompactionReserveTokens() forces reserveTokens >= 20_000 (pi-settings.ts).
+# That overrides clawdeez.json (e.g. 3072) and exceeds 16k-context models → precheck overflow.
+COPY patch-openclaw-pi-compaction-default.py /app/patch-openclaw-pi-compaction-default.py
+RUN chmod +x /app/patch-openclaw-pi-compaction-default.py && \
+    python3 /app/patch-openclaw-pi-compaction-default.py
+
 # ClawDeez favicons (synced from clawdeez-core frontend/src/app); overrides OpenClaw defaults in dist/control-ui
 COPY clawdeez-control-ui-icons/ /app/clawdeez-control-ui-icons/
 COPY clawdeez-favicon.svg /app/clawdeez-favicon.svg
