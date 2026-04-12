@@ -8,7 +8,7 @@ Reads Railway variables set by clawdeez-core provisioning (see backend `openclaw
 - OPENCLAW_UI_SEAM_COLOR -> ui.seamColor; overrides --primary/--accent on connect shell
 - OPENCLAW_UI_GATEWAY_SUBTITLE -> replaces "Gateway Dashboard" (default: Panel del gateway)
 - OPENCLAW_CONTROL_UI_BRAND_CSS_URL -> optional extra stylesheet (HTTPS); if unset, ./openclaw-control-ui-brand.css bundled in the image (same-origin, CSP-safe)
-- OPENCLAW_COMPACTION_RESERVE_TOKENS_FLOOR -> minimum `agents.defaults.compaction.reserveTokensFloor` (default depends on **INJECTED_OR_MODEL**: `openrouter/auto` → high floor; MEDIUM/FREE constrained routes → modest floor so ~16k ctx models are not starved). **skip** / **0** skips raising the floor from env but still **clamps** an existing value above the tier ceiling (fixes onboard defaults that starve small-context routes).
+- OPENCLAW_COMPACTION_RESERVE_TOKENS_FLOOR -> caps `agents.defaults.compaction` for small-context tiers (MEDIUM/FREE): sets **both** `reserveTokensFloor` and `reserveTokens` (OpenClaw uses max(reserveTokens, reserveTokensFloor); a lone low floor does nothing if reserveTokens≈20k). **skip** / **0** still clamps unsafe totals to the tier ceiling.
 
 Wire-up: see [clawdeez-openclaw-template](https://github.com/gtopolice/clawdeez-openclaw-template).
 """
@@ -101,8 +101,22 @@ def merge_ui_from_env(cfg: dict) -> bool:
     return True
 
 
+def _parse_nonneg_int(raw: object) -> int:
+    try:
+        if raw is None:
+            return 0
+        return int(raw)
+    except (TypeError, ValueError):
+        return 0
+
+
 def merge_compaction_reserve_floor(cfg: dict) -> bool:
-    """Merge reserveTokensFloor; cap by INJECTED_OR_MODEL so small-context routes do not overflow."""
+    """Merge compaction reserve; cap by INJECTED_OR_MODEL so small-context routes do not overflow.
+
+    OpenClaw (pi-settings.ts) uses effective reserve = max(reserveTokens, reserveTokensFloor).
+    Onboard often sets both or defaults reserveTokens≈20k — a low floor alone still yields ~20k
+    effective reserve and immediate overflow on ~16k models.
+    """
     floor_default, ceiling = _compaction_floor_ceiling_from_injected_model()
     raw = os.environ.get(
         "OPENCLAW_COMPACTION_RESERVE_TOKENS_FLOOR",
@@ -114,18 +128,47 @@ def merge_compaction_reserve_floor(cfg: dict) -> bool:
     agents = cfg.setdefault("agents", {})
     defaults = agents.setdefault("defaults", {})
     compaction = defaults.setdefault("compaction", {})
-    cur_raw = compaction.get("reserveTokensFloor")
-    try:
-        current = int(cur_raw) if cur_raw is not None else 0
-    except (TypeError, ValueError):
-        current = 0
+    cur_floor = _parse_nonneg_int(compaction.get("reserveTokensFloor"))
+    cur_rt = _parse_nonneg_int(compaction.get("reserveTokens"))
+    effective = max(cur_floor, cur_rt)
 
-    # "skip" means do not raise the floor from env — but we still clamp an unsafe value
-    # (e.g. onboard default 98304) so ~16k OpenRouter routes do not get promptBudgetBeforeReserve≈1.
-    if raw.lower() in ("0", "false", "off", "skip", "none"):
-        if current <= ceiling:
+    # Advanced tier: only adjust reserveTokensFloor (legacy); leave reserveTokens to user/OpenClaw.
+    small_context = floor_default < 50_000
+
+    if small_context:
+        skip_merge = raw.lower() in ("0", "false", "off", "skip", "none")
+        if skip_merge:
+            floor_min_use = 0
+        else:
+            try:
+                floor_min_use = int(raw, 10)
+            except ValueError:
+                print(
+                    "OPENCLAW_COMPACTION_RESERVE_TOKENS_FLOOR invalid; using",
+                    floor_default,
+                    file=sys.stderr,
+                )
+                floor_min_use = floor_default
+            if floor_min_use < 0:
+                return False
+            floor_min_use = min(floor_min_use, ceiling)
+
+        if skip_merge:
+            target = min(effective, ceiling)
+        else:
+            target = min(max(floor_min_use, effective), ceiling)
+
+        if cur_floor == target and cur_rt == target:
             return False
-        new_val = min(current, ceiling)
+        compaction["reserveTokensFloor"] = target
+        compaction["reserveTokens"] = target
+        return True
+
+    # Large-context (Advanced) tier
+    if raw.lower() in ("0", "false", "off", "skip", "none"):
+        if cur_floor <= ceiling:
+            return False
+        new_val = min(cur_floor, ceiling)
         compaction["reserveTokensFloor"] = new_val
         return True
 
@@ -141,7 +184,7 @@ def merge_compaction_reserve_floor(cfg: dict) -> bool:
     if floor_min < 0:
         return False
     floor_min = min(floor_min, ceiling)
-    new_val = min(max(floor_min, current), ceiling)
+    new_val = min(max(floor_min, cur_floor), ceiling)
     if compaction.get("reserveTokensFloor") == new_val:
         return False
     compaction["reserveTokensFloor"] = new_val
