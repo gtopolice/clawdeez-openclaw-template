@@ -8,7 +8,7 @@ Reads Railway variables set by clawdeez-core provisioning (see backend `openclaw
 - OPENCLAW_UI_SEAM_COLOR -> ui.seamColor; overrides --primary/--accent on connect shell
 - OPENCLAW_UI_GATEWAY_SUBTITLE -> replaces "Gateway Dashboard" (default: Panel del gateway)
 - OPENCLAW_CONTROL_UI_BRAND_CSS_URL -> optional extra stylesheet (HTTPS); if unset, ./openclaw-control-ui-brand.css bundled in the image (same-origin, CSP-safe)
-- OPENCLAW_COMPACTION_RESERVE_TOKENS_FLOOR -> minimum `agents.defaults.compaction.reserveTokensFloor` (default depends on **INJECTED_OR_MODEL**: `openrouter/auto` → high floor; MEDIUM/ FREE constrained routes → modest floor so ~16k ctx models are not starved). Set to **0** / **skip** to skip merging.
+- OPENCLAW_COMPACTION_RESERVE_TOKENS_FLOOR -> minimum `agents.defaults.compaction.reserveTokensFloor` (default depends on **INJECTED_OR_MODEL**: `openrouter/auto` → high floor; MEDIUM/FREE constrained routes → modest floor so ~16k ctx models are not starved). **skip** / **0** skips raising the floor from env but still **clamps** an existing value above the tier ceiling (fixes onboard defaults that starve small-context routes).
 
 Wire-up: see [clawdeez-openclaw-template](https://github.com/gtopolice/clawdeez-openclaw-template).
 """
@@ -30,9 +30,18 @@ _INJECTED_MEDIUM = "openrouter/auto:free,*-small*,*-mini*,*-nano*,*-flash*"
 _INJECTED_FREE = "openrouter/free"
 
 
+def _normalized_injected_model() -> str:
+    """Strip provider prefixes Railway may omit but OpenClaw logs with (e.g. custom-openrouter-ai/)."""
+    m = os.environ.get("INJECTED_OR_MODEL", "").strip()
+    for prefix in ("custom-openrouter-ai/",):
+        if m.startswith(prefix):
+            return m[len(prefix) :]
+    return m
+
+
 def _compaction_floor_ceiling_from_injected_model() -> tuple[int, int]:
     """Return (default_floor, max_allowed) for reserveTokensFloor."""
-    m = os.environ.get("INJECTED_OR_MODEL", "").strip()
+    m = _normalized_injected_model()
     if m == _INJECTED_ADVANCED:
         return (98304, 200000)
     # 16k ctx: large reserveTokensFloor steals budget from system+workspace; keep floor/cap modest.
@@ -40,6 +49,9 @@ def _compaction_floor_ceiling_from_injected_model() -> tuple[int, int]:
         return (3072, 4096)
     if m == _INJECTED_FREE:
         return (2048, 3072)
+    # Substring match: exact env string can differ slightly from constants across releases.
+    if "openrouter/auto:free" in m and "*-small*" in m:
+        return (3072, 4096)
     if m.startswith("openrouter/auto:free") and "*-small*" in m:
         return (3072, 4096)
     if m.startswith("openrouter/free"):
@@ -98,8 +110,25 @@ def merge_compaction_reserve_floor(cfg: dict) -> bool:
     ).strip()
     if not raw:
         raw = str(floor_default)
+
+    agents = cfg.setdefault("agents", {})
+    defaults = agents.setdefault("defaults", {})
+    compaction = defaults.setdefault("compaction", {})
+    cur_raw = compaction.get("reserveTokensFloor")
+    try:
+        current = int(cur_raw) if cur_raw is not None else 0
+    except (TypeError, ValueError):
+        current = 0
+
+    # "skip" means do not raise the floor from env — but we still clamp an unsafe value
+    # (e.g. onboard default 98304) so ~16k OpenRouter routes do not get promptBudgetBeforeReserve≈1.
     if raw.lower() in ("0", "false", "off", "skip", "none"):
-        return False
+        if current <= ceiling:
+            return False
+        new_val = min(current, ceiling)
+        compaction["reserveTokensFloor"] = new_val
+        return True
+
     try:
         floor_min = int(raw, 10)
     except ValueError:
@@ -112,14 +141,6 @@ def merge_compaction_reserve_floor(cfg: dict) -> bool:
     if floor_min < 0:
         return False
     floor_min = min(floor_min, ceiling)
-    agents = cfg.setdefault("agents", {})
-    defaults = agents.setdefault("defaults", {})
-    compaction = defaults.setdefault("compaction", {})
-    cur_raw = compaction.get("reserveTokensFloor")
-    try:
-        current = int(cur_raw) if cur_raw is not None else 0
-    except (TypeError, ValueError):
-        current = 0
     new_val = min(max(floor_min, current), ceiling)
     if compaction.get("reserveTokensFloor") == new_val:
         return False
