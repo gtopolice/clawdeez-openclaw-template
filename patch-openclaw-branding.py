@@ -9,6 +9,7 @@ Reads Railway variables set by clawdeez-core provisioning (see backend `openclaw
 - OPENCLAW_UI_GATEWAY_SUBTITLE -> replaces "Gateway Dashboard" (default: Panel del gateway)
 - OPENCLAW_CONTROL_UI_BRAND_CSS_URL -> optional extra stylesheet (HTTPS); if unset, ./openclaw-control-ui-brand.css bundled in the image (same-origin, CSP-safe)
 - OPENCLAW_COMPACTION_RESERVE_TOKENS_FLOOR -> caps `agents.defaults.compaction` for small-context tiers (MEDIUM/FREE): sets **both** `reserveTokensFloor` and `reserveTokens` (OpenClaw uses max(reserveTokens, reserveTokensFloor); a lone low floor does nothing if reserveTokens≈20k). **skip** / **0** still clamps unsafe totals to the tier ceiling.
+- CLAWDEEZ_CONTROL_UI_LOCALE -> `es` or `en`; injects an early inline script so Control UI reads `openclaw.i18n.locale` before the SPA boots (matches ClawDeez dashboard language at provision time).
 
 Wire-up: see [clawdeez-openclaw-template](https://github.com/gtopolice/clawdeez-openclaw-template).
 """
@@ -66,6 +67,11 @@ def npm_global_root() -> pathlib.Path:
 
 SHELL_START = "<!-- clawdeez-brand-shell-start -->"
 SHELL_END = "<!-- clawdeez-brand-shell-end -->"
+
+LOCALE_BOOTSTRAP_START = "<!-- clawdeez-locale-bootstrap-start -->"
+LOCALE_BOOTSTRAP_END = "<!-- clawdeez-locale-bootstrap-end -->"
+
+_VALID_CLAWDEEZ_LOCALES = frozenset({"es", "en"})
 
 
 def accent_hover(base_hex: str) -> str:
@@ -217,6 +223,34 @@ def strip_brand_shell(html_text: str) -> str:
     return re.sub(pattern, "", html_text, flags=re.DOTALL)
 
 
+def strip_locale_bootstrap(html_text: str) -> str:
+    pattern = re.escape(LOCALE_BOOTSTRAP_START) + r".*?" + re.escape(LOCALE_BOOTSTRAP_END)
+    return re.sub(pattern, "", html_text, flags=re.DOTALL)
+
+
+def build_locale_bootstrap_block() -> str | None:
+    """Match OpenClaw Control UI `openclaw.i18n.locale` (see openclaw `ui/src/i18n/lib/translate.ts`)."""
+    raw = os.environ.get("CLAWDEEZ_CONTROL_UI_LOCALE", "").strip().lower()
+    if raw not in _VALID_CLAWDEEZ_LOCALES:
+        return None
+    safe = json.dumps(raw)
+    inner = (
+        "(function(){try{localStorage.setItem("
+        + json.dumps("openclaw.i18n.locale")
+        + ","
+        + safe
+        + ");}catch(e){}})();"
+    )
+    lines = [
+        LOCALE_BOOTSTRAP_START,
+        '<script type="text/javascript" data-clawdeez-locale-bootstrap="1">',
+        inner,
+        "</script>",
+        LOCALE_BOOTSTRAP_END,
+    ]
+    return "\n".join(lines) + "\n"
+
+
 def build_brand_shell_block() -> str | None:
     name = os.environ.get("OPENCLAW_UI_ASSISTANT_NAME", "").strip()
     seam = os.environ.get("OPENCLAW_UI_SEAM_COLOR", "").strip()
@@ -266,6 +300,17 @@ def patch_control_ui_index_html() -> None:
 
     text = index.read_text(encoding="utf-8")
     updated = strip_brand_shell(text)
+    updated = strip_locale_bootstrap(updated)
+
+    locale_block = build_locale_bootstrap_block()
+    if locale_block and "<head" in updated:
+        updated = re.sub(
+            r"(<head[^>]*>)",
+            r"\1\n" + locale_block,
+            updated,
+            count=1,
+            flags=re.IGNORECASE,
+        )
 
     name = os.environ.get("OPENCLAW_UI_ASSISTANT_NAME", "").strip()
     if name:
